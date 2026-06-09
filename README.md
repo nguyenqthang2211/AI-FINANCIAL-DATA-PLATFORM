@@ -1,2 +1,2 @@
 # AI-FINANCIAL-DATA-PLATFORM
-AI-powered financial transaction analytics platform for learning data engineering, big data, ML, MLOps, and LLM/RAG.
+End-to-end financial transaction data platform using SQL Server, T-SQL, Spark, Airflow, Kafka, Power BI, Machine Learning, MLOps, and RAG.
