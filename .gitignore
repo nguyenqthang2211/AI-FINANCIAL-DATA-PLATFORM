@@ -216,3 +216,36 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Environment variables
+.env
+
+# SQL Server backup files
+*.bak
+*.trn
+
+# Python
+*.pyc
+__pycache__/
+.ipynb_checkpoints/
+
+# Local data lake files
+data/raw/*
+data/bronze/*
+data/silver/*
+data/gold/*
+!data/raw/.gitkeep
+!data/bronze/.gitkeep
+!data/silver/.gitkeep
+!data/gold/.gitkeep
+
+# ML artifacts
+ml/models/*
+mlruns/
+
+# RAG vector store
+rag/vector_store/*
+!rag/vector_store/.gitkeep
+
+# Power BI temp files
+*.tmp
