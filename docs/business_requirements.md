@@ -49,7 +49,3 @@ The main goal is to support transaction analytics, operational monitoring, fraud
 - What time of day has the most transactions?
 - How many transactions are successful, failed, pending or reversed?
 - Which transactions look suspicious?
-
-## 6. Scope 
-
-In week 1, this project focuses only on designing the OLTP database for the financial transaction system. This includes defining the business requirements, identifying core data objects, designing entities and relationships, creating the SQL schema, inserting sample data and writing validation queries.
