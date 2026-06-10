@@ -1,6 +1,6 @@
-﻿# AI Financial Data Platform
+﻿# FinPulse
 
-End-to-end financial transaction data platform using SQL Server, T-SQL, Spark, Airflow, Kafka, Power BI, Machine Learning, MLOps, and RAG.
+An end-to-end financial transaction data platform using SQL Server, T-SQL, Spark, Airflow, Kafka, Power BI, Machine Learning, MLOps, and RAG.
 
 ## 1. Project Overview
 
