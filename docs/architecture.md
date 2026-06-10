@@ -1,8 +1,8 @@
-﻿# System Architecture
+﻿# FinPulse - System Architecture
 
 ## Overview
 
-AI Financial Data Platform is designed as an end-to-end financial transaction data platform that covers operational data storage, analytical processing, fraud detection, business intelligence, machine learning, MLOps, and LLM/RAG-based knowledge retrieval.
+FinPulse is designed as an end-to-end financial transaction data platform that covers operational data storage, analytical processing, fraud detection, business intelligence, machine learning, MLOps, and LLM/RAG-based knowledge retrieval.
 
 ## High-Level Architecture
 
