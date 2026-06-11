@@ -1,321 +1,1058 @@
-# Entity Relationship Rules and Semantic Constraints
+# Relationship Rules
 
 ## 1. Overview
 
-This document describes the relationship rules, cardinalities, foreign keys, and semantic constraints of the **Financial Transaction OLTP Database**.
+This document defines the main relationship rules used in the FinPulse OLTP database design.
 
-The model includes standard 1:N relationships, optional relationships, superclass/subclass specialization, recursive relationships, weak entities, and associative entities.
+The relationship rules are based on the Chen-style Enhanced Entity Relationship Diagram of the financial transaction system.
 
----
+The goal of this document is to describe:
 
-## 2. Specialization Rules
+* Business relationships between entities
+* Cardinality constraints
+* Mandatory and optional participation
+* Weak entity rules
+* Superclass and subclass rules
+* Recursive relationship rules
+* Associative relationship rules
+* How conceptual EERD relationships will be mapped into relational tables
 
-### 2.1 `users` – `customers` – `admins`
+This project uses synthetic data only. No real customer data, card data, or financial data is used.
 
-**Specialization Type:** Disjoint and total specialization
+## 2. EERD Notation Used
 
-A user must be either a customer or an admin. In this learning project, a user is not allowed to be both a customer and an admin at the same time.
+The EERD uses Chen-style notation.
 
-**Rules:**
-- `customers.customer_id` references `users.user_id`
-- `admins.admin_id` references `users.user_id`
-- `customers` and `admins` inherit common user information from `users`
+Main notation:
 
----
+* Rectangle: entity
+* Double rectangle: weak entity
+* Oval: attribute
+* Underlined oval: primary key attribute
+* Diamond: relationship
+* Double diamond: identifying relationship
+* Double line: total participation or mandatory participation
+* Single line: partial participation or optional participation
+* Circle with `d`: disjoint specialization
+* Relationship with attributes: associative relationship that will become a table in the relational schema
 
-## 3. Recursive Relationship
+## 3. Superclass and Subclass Rule
 
-### 3.1 `admins` – `admin_permissions` – `admins`
+## 3.1 users, customers, and admins
 
-**Relationship:** Recursive N:N
+Relationship type:
 
-One admin can grant permissions to many other admins. One admin can also receive permissions from many other admins.
+```text
+USERS → CUSTOMERS
+USERS → ADMINS
+```
 
-**Foreign Keys:**
-- `admin_permissions.grantor_admin_id` references `admins.admin_id`
-- `admin_permissions.grantee_admin_id` references `admins.admin_id`
+The `users` entity is the superclass.
 
-**Relationship Attributes:**
-- `granted_at`
-- `permission_scope`
-- `permission_content`
+The subclasses are:
 
-This relationship is similar to an administrator delegation relationship.
+* `customers`
+* `admins`
 
----
+Specialization constraints:
 
-## 4. Core Relationship Rules
+* Total specialization
+* Disjoint specialization
 
-### 4.1 `customers` – `accounts`
+Business rules:
 
-**Relationship:** 1:N
+* Every user must be either a customer or an admin.
+* A user cannot be both a customer and an admin at the same time.
+* Common user information is stored in `users`.
+* Customer-specific information is stored in `customers`.
+* Admin-specific information is stored in `admins`.
 
-One customer can own many accounts. Each account belongs to exactly one customer.
+Relational mapping:
 
-**Foreign Key:**
-- `accounts.customer_id` references `customers.customer_id`
+```text
+users(user_id, ...)
+customers(customer_id, user_id, ...)
+admins(admin_id, user_id, ...)
+```
 
----
+Implementation notes:
 
-### 4.2 `branches` – `accounts`
+* `customers.user_id` references `users.user_id`.
+* `admins.user_id` references `users.user_id`.
+* Additional constraints should be used later to enforce disjoint and total specialization if needed.
 
-**Relationship:** 1:N
+## 4. User and Administrator Relationships
 
-One branch can manage many accounts. Each account may be opened at one branch.
+## 4.1 Admin Grants Permission to Admin
 
-**Foreign Key:**
-- `accounts.branch_id` references `branches.branch_id`
+Relationship:
 
----
+```text
+ADMINS — Grants Permission — ADMINS
+```
 
-### 4.3 `currencies` – `accounts`
+Relationship type:
 
-**Relationship:** 1:N
+* Recursive relationship
+* Many-to-many relationship
 
-One currency can be used by many accounts. Each account uses one primary currency.
+Cardinality:
 
-**Foreign Key:**
-- `accounts.currency_code` references `currencies.currency_code`
+```text
+ADMINS N — Grants Permission — N ADMINS
+```
 
----
+Participation:
 
-### 4.4 `accounts` – `cards`
+* Optional on the grantor admin side
+* Optional on the grantee admin side
 
-**Relationship:** 1:N
+Business rules:
 
-One account can have many cards. Each card belongs to one account.
+* One admin can grant permissions to many other admins.
+* One admin can receive permissions from many other admins.
+* An admin may exist without granting any permission.
+* An admin may exist without receiving any permission.
+* The same `admins` entity participates in the relationship with two roles:
 
-**Foreign Key:**
-- `cards.account_id` references `accounts.account_id`
+  * Grantor
+  * Grantee
 
----
+Relationship attributes:
 
-### 4.5 `accounts` – `transactions`
+* `granted_at`
+* `permission_scope`
+* `permission_content`
 
-**Relationship:** 1:N
+Relational mapping:
 
-One account can generate many transactions. Each transaction must belong to one account.
+```text
+Grants Permission → admin_permissions
+```
 
-**Foreign Key:**
-- `transactions.account_id` references `accounts.account_id`
+Implementation table:
 
----
+```text
+admin_permissions(
+    admin_permission_id,
+    grantor_admin_id,
+    grantee_admin_id,
+    granted_at,
+    permission_scope,
+    permission_content
+)
+```
 
-### 4.6 `cards` – `transactions`
+Implementation notes:
 
-**Relationship:** 1:N, optional on transaction side
+* `grantor_admin_id` references `admins.admin_id`.
+* `grantee_admin_id` references `admins.admin_id`.
+* `grantor_admin_id` and `grantee_admin_id` should not be the same for normal permission delegation.
 
-One card can be used in many transactions. However, a transaction may not use a card.
+## 5. Customer, Account, Branch, Currency, and Card Relationships
 
-**Foreign Key:**
-- `transactions.card_id` references `cards.card_id`
+## 5.1 Customer Owns Account
 
-**Optional Rule:**
-- `transactions.card_id` may be null.
+Relationship:
 
----
+```text
+CUSTOMERS — Owns — ACCOUNTS
+```
 
-### 4.7 `merchant_categories` – `merchants`
+Relationship type:
 
-**Relationship:** 1:N
+* One-to-many
 
-One merchant category can contain many merchants. Each merchant belongs to one merchant category.
+Cardinality:
 
-**Foreign Key:**
-- `merchants.merchant_category_id` references `merchant_categories.merchant_category_id`
+```text
+CUSTOMERS 1 — Owns — N ACCOUNTS
+```
 
----
+Participation:
 
-### 4.8 `merchants` – `transactions`
+* Optional on the customer side
+* Mandatory on the account side
 
-**Relationship:** 1:N, optional on transaction side
+Business rules:
 
-One merchant can appear in many transactions. However, a transaction such as ATM withdrawal or personal transfer may not involve a merchant.
+* A customer can own zero or many accounts.
+* Each account must belong to exactly one customer.
+* An account cannot exist without a customer.
 
-**Foreign Key:**
-- `transactions.merchant_id` references `merchants.merchant_id`
+Relational mapping:
 
-**Optional Rule:**
-- `transactions.merchant_id` may be null.
+```text
+accounts.customer_id → customers.customer_id
+```
 
----
+## 5.2 Branch Manages Account
 
-### 4.9 `channels` – `transactions`
+Relationship:
 
-**Relationship:** 1:N
+```text
+BRANCHES — Manages — ACCOUNTS
+```
 
-One channel can be used in many transactions. Each transaction is performed through one channel.
+Relationship type:
 
-**Foreign Key:**
-- `transactions.channel_id` references `channels.channel_id`
+* One-to-many
 
----
+Cardinality:
 
-### 4.10 `transaction_types` – `transactions`
+```text
+BRANCHES 1 — Manages — N ACCOUNTS
+```
 
-**Relationship:** 1:N
+Participation:
 
-One transaction type can appear in many transactions. Each transaction has one transaction type.
+* Optional on the branch side
+* Mandatory on the account side
 
-**Foreign Key:**
-- `transactions.transaction_type_id` references `transaction_types.transaction_type_id`
+Business rules:
 
----
+* A branch can manage zero or many accounts.
+* Each account must be managed by exactly one branch.
+* An account cannot exist without a managing branch.
 
-### 4.11 `currencies` – `transactions`
+Relational mapping:
 
-**Relationship:** 1:N
+```text
+accounts.branch_id → branches.branch_id
+```
 
-One currency can appear in many transactions. Each transaction uses one currency.
+## 5.3 Currency Denominates Account
 
-**Foreign Key:**
-- `transactions.currency_code` references `currencies.currency_code`
+Relationship:
 
----
+```text
+CURRENCIES — Denominated In — ACCOUNTS
+```
 
-## 5. Weak Entity Rule
+Relationship type:
 
-### 5.1 `transactions` – `transaction_status_history`
+* One-to-many
 
-**Relationship:** 1:N identifying relationship
+Cardinality:
 
-`transaction_status_history` is modeled as a weak entity because it depends on `transactions` for identification.
+```text
+CURRENCIES 1 — Denominated In — N ACCOUNTS
+```
 
-**Primary Key of Weak Entity:**
-- `transaction_id`
-- `status_sequence_no`
+Participation:
 
-**Foreign Key:**
-- `transaction_status_history.transaction_id` references `transactions.transaction_id`
+* Optional on the currency side
+* Mandatory on the account side
 
-**Meaning:**
-A transaction can have many status history records. Each status history record cannot exist without its parent transaction.
+Business rules:
 
----
+* A currency can be used by zero or many accounts.
+* Each account must use exactly one currency.
+* An account cannot exist without a currency.
 
-## 6. Associative Entity Rules
+Relational mapping:
 
-### 6.1 `transactions` – `fee_rules` through `transaction_fee_charges`
+```text
+accounts.currency_code → currencies.currency_code
+```
 
-**Relationship:** M:N resolved by associative entity
+## 5.4 Account Has Card
 
-A transaction can have one or more fee charges. A fee rule can be applied to many transactions.
+Relationship:
 
-**Associative Entity:**
-- `transaction_fee_charges`
+```text
+ACCOUNTS — Has — CARDS
+```
 
-**Foreign Keys:**
-- `transaction_fee_charges.transaction_id` references `transactions.transaction_id`
-- `transaction_fee_charges.fee_rule_id` references `fee_rules.fee_rule_id`
+Relationship type:
 
-**Relationship Attributes:**
-- `fee_amount`
-- `calculated_at`
-- `calculation_note`
+* One-to-many
 
----
+Cardinality:
 
-### 6.2 `transactions` – `fraud_rules` through `risk_alerts`
+```text
+ACCOUNTS 1 — Has — N CARDS
+```
 
-**Relationship:** M:N resolved by associative entity
+Participation:
 
-A transaction can violate many fraud rules. A fraud rule can generate alerts for many transactions.
+* Optional on the account side
+* Mandatory on the card side
 
-**Associative Entity:**
-- `risk_alerts`
+Business rules:
 
-**Foreign Keys:**
-- `risk_alerts.transaction_id` references `transactions.transaction_id`
-- `risk_alerts.fraud_rule_id` references `fraud_rules.fraud_rule_id`
+* An account can have zero or many cards.
+* Each card must belong to exactly one account.
+* A card cannot exist without an account.
+* Only masked card numbers are stored.
+* Full card numbers must not be stored.
 
-**Relationship Attributes:**
-- `risk_score`
-- `alert_status`
-- `alert_reason`
-- `created_at`
-- `resolved_at`
+Relational mapping:
 
----
+```text
+cards.account_id → accounts.account_id
+```
 
-### 6.3 `admins` – `risk_alerts` through `alert_reviews`
+## 6. Transaction Processing Relationships
 
-**Relationship:** M:N resolved by associative entity
+## 6.1 Account Generates Transaction
 
-An admin can review many risk alerts. A risk alert can have multiple review records over time.
+Relationship:
 
-**Associative Entity:**
-- `alert_reviews`
+```text
+ACCOUNTS — Generates — TRANSACTIONS
+```
 
-**Foreign Keys:**
-- `alert_reviews.admin_id` references `admins.admin_id`
-- `alert_reviews.alert_id` references `risk_alerts.alert_id`
+Relationship type:
 
-**Relationship Attributes:**
-- `reviewed_at`
-- `review_decision`
-- `review_note`
+* One-to-many
 
----
+Cardinality:
 
-## 7. ERD Checklist
+```text
+ACCOUNTS 1 — Generates — N TRANSACTIONS
+```
 
-When drawing the ERD, make sure it includes the following elements:
+Participation:
 
-- Superclass: `users`
-- Subclasses: `customers`, `admins`
-- Recursive relationship: `admin_permissions`
-- Weak entity: `transaction_status_history`
-- Central entity: `transactions`
-- Associative entity for fee application: `transaction_fee_charges`
-- Associative entity for fraud detection: `risk_alerts`
-- Associative entity for alert review: `alert_reviews`
-- Optional foreign keys: `transactions.card_id`, `transactions.merchant_id`
+* Optional on the account side
+* Mandatory on the transaction side
 
----
+Business rules:
 
-## 8. Semantic Constraints
+* An account can generate zero or many transactions.
+* Each transaction must belong to exactly one account.
+* A transaction cannot exist without an account.
 
-### 8.1 Transaction Constraints
+Relational mapping:
 
-- `amount` must be greater than 0.
-- `transaction.status` must be one of: `PENDING`, `SUCCESS`, `FAILED`, `REVERSED`, `REFUNDED`.
-- `card_id` may be null if the transaction does not use a card.
-- `merchant_id` may be null for non-merchant transactions.
-- `currency_code` should be consistent with the account currency if foreign exchange is not supported.
+```text
+transactions.account_id → accounts.account_id
+```
 
-### 8.2 Customer and Account Constraints
+## 6.2 Card Used in Transaction
 
-- `kyc_status` must be one of: `PENDING`, `VERIFIED`, `REJECTED`.
-- A blocked or closed account should not generate new transactions.
-- `account_number` must be unique.
+Relationship:
 
-### 8.3 Card Constraints
+```text
+CARDS — Used In — TRANSACTIONS
+```
 
-- Card numbers must not be stored in full.
-- Only masked card numbers should be stored in `card_number_masked`.
-- Expired, blocked, or cancelled cards should not be used for new transactions.
+Relationship type:
 
-### 8.4 Status History Constraints
+* One-to-many
 
-- Every transaction status change should create a new record in `transaction_status_history`.
-- `old_status` and `new_status` should not be the same.
-- Finalized transactions should not be updated without a corresponding status history record.
+Cardinality:
 
-### 8.5 Fee Rule Constraints
+```text
+CARDS 1 — Used In — N TRANSACTIONS
+```
 
-- `fixed_fee`, `percentage_fee`, `min_fee`, and `max_fee` must not be negative.
-- Fee rules are valid only between `effective_from` and `effective_to`.
-- If multiple fee rules match, the system must define a priority rule.
+Participation:
 
-### 8.6 Risk and Fraud Constraints
+* Optional on the card side
+* Optional on the transaction side
 
-- `risk_score` should be within a defined range, such as 0 to 1 or 0 to 100.
-- `alert_status` should be one of: `OPEN`, `INVESTIGATING`, `RESOLVED`, `FALSE_POSITIVE`.
-- Each alert review must be performed by a valid admin.
+Business rules:
 
-### 8.7 Security and Privacy Constraints
+* A card can be used in zero or many transactions.
+* A transaction may or may not use a card.
+* Card-based transactions use a card.
+* Non-card transactions such as internal transfers, branch deposits, or some account operations may not use a card.
 
-- Customer and transaction data are sensitive.
-- Card numbers must be masked.
-- Real customer data must not be used in this learning project.
-- In real systems, access control, audit logging, and data masking are required.
+Relational mapping:
+
+```text
+transactions.card_id → cards.card_id
+```
+
+Implementation note:
+
+```text
+transactions.card_id is nullable
+```
+
+## 6.3 Channel Processes Transaction
+
+Relationship:
+
+```text
+CHANNELS — Through — TRANSACTIONS
+```
+
+Relationship type:
+
+* One-to-many
+
+Cardinality:
+
+```text
+CHANNELS 1 — Through — N TRANSACTIONS
+```
+
+Participation:
+
+* Optional on the channel side
+* Mandatory on the transaction side
+
+Business rules:
+
+* A channel can process zero or many transactions.
+* Each transaction must be processed through exactly one channel.
+* A transaction cannot exist without a processing channel.
+
+Relational mapping:
+
+```text
+transactions.channel_id → channels.channel_id
+```
+
+## 6.4 Transaction Type Classifies Transaction
+
+Relationship:
+
+```text
+TRANSACTION TYPE — Has Type — TRANSACTIONS
+```
+
+Relationship type:
+
+* One-to-many
+
+Cardinality:
+
+```text
+TRANSACTION TYPE 1 — Has Type — N TRANSACTIONS
+```
+
+Participation:
+
+* Optional on the transaction type side
+* Mandatory on the transaction side
+
+Business rules:
+
+* A transaction type can be used by zero or many transactions.
+* Each transaction must have exactly one transaction type.
+* A transaction cannot exist without a transaction type.
+
+Relational mapping:
+
+```text
+transactions.transaction_type_id → transaction_types.transaction_type_id
+```
+
+## 6.5 Currency Used by Transaction
+
+Relationship:
+
+```text
+CURRENCIES — Uses — TRANSACTIONS
+```
+
+Relationship type:
+
+* One-to-many
+
+Cardinality:
+
+```text
+CURRENCIES 1 — Uses — N TRANSACTIONS
+```
+
+Participation:
+
+* Optional on the currency side
+* Mandatory on the transaction side
+
+Business rules:
+
+* A currency can be used by zero or many transactions.
+* Each transaction must use exactly one currency.
+* A transaction cannot exist without a currency.
+
+Relational mapping:
+
+```text
+transactions.currency_code → currencies.currency_code
+```
+
+## 7. Merchant Relationships
+
+## 7.1 Merchant Category Contains Merchant
+
+Relationship:
+
+```text
+MERCHANT CATEGORIES — Belonged To — MERCHANTS
+```
+
+Relationship type:
+
+* One-to-many
+
+Cardinality:
+
+```text
+MERCHANT CATEGORIES 1 — Belonged To — N MERCHANTS
+```
+
+Participation:
+
+* Optional on the merchant category side
+* Mandatory on the merchant side
+
+Business rules:
+
+* A merchant category can contain zero or many merchants.
+* Each merchant must belong to exactly one merchant category.
+* A merchant cannot exist without a merchant category.
+
+Relational mapping:
+
+```text
+merchants.merchant_category_id → merchant_categories.merchant_category_id
+```
+
+## 7.2 Merchant Occurs at Transaction
+
+Relationship:
+
+```text
+MERCHANTS — Occurred At — TRANSACTIONS
+```
+
+Relationship type:
+
+* One-to-many
+
+Cardinality:
+
+```text
+MERCHANTS 1 — Occurred At — N TRANSACTIONS
+```
+
+Participation:
+
+* Optional on the merchant side
+* Optional on the transaction side
+
+Business rules:
+
+* A merchant can be involved in zero or many transactions.
+* A transaction may or may not involve a merchant.
+* Merchant payment transactions usually involve a merchant.
+* Internal transfers, ATM withdrawals, and some branch transactions may not involve a merchant.
+
+Relational mapping:
+
+```text
+transactions.merchant_id → merchants.merchant_id
+```
+
+Implementation note:
+
+```text
+transactions.merchant_id is nullable
+```
+
+## 8. Transaction Status History Relationship
+
+## 8.1 Transaction Has Status History
+
+Relationship:
+
+```text
+TRANSACTIONS — Has Status History — TRANSACTION STATUS HISTORY
+```
+
+Relationship type:
+
+* One-to-many
+* Identifying relationship
+
+Cardinality:
+
+```text
+TRANSACTIONS 1 — Has Status History — N TRANSACTION STATUS HISTORY
+```
+
+Participation:
+
+* Optional on the transaction side
+* Mandatory on the transaction status history side
+
+EERD modeling:
+
+* `transaction_status_history` is a weak entity.
+* `Has Status History` is an identifying relationship.
+* The weak entity is shown using a double rectangle.
+* The identifying relationship is shown using a double diamond.
+
+Business rules:
+
+* A transaction can have zero or many status history records.
+* Each status history record must belong to exactly one transaction.
+* A status history record cannot exist without its parent transaction.
+* A transaction status history record is identified by the parent transaction and a sequence number.
+
+Primary key:
+
+```text
+transaction_id + status_sequence_no
+```
+
+Relational mapping:
+
+```text
+transaction_status_history.transaction_id → transactions.transaction_id
+```
+
+Implementation table:
+
+```text
+transaction_status_history(
+    transaction_id,
+    status_sequence_no,
+    old_status,
+    new_status,
+    changed_at,
+    change_reason
+)
+```
+
+## 9. Fee Management Relationships
+
+## 9.1 Fee Rule Applies to Transaction Type
+
+Relationship:
+
+```text
+FEE RULES — Applies To — TRANSACTION TYPE
+```
+
+Relationship type:
+
+* One-to-many from transaction type to fee rules
+
+Cardinality:
+
+```text
+TRANSACTION TYPE 1 — Applies To — N FEE RULES
+```
+
+Participation:
+
+* Optional on the transaction type side
+* Mandatory on the fee rule side
+
+Business rules:
+
+* A transaction type can have zero or many fee rules.
+* Each fee rule must apply to exactly one transaction type.
+
+Relational mapping:
+
+```text
+fee_rules.transaction_type_id → transaction_types.transaction_type_id
+```
+
+## 9.2 Fee Rule Applies Through Channel
+
+Relationship:
+
+```text
+FEE RULES — Applies Through — CHANNELS
+```
+
+Relationship type:
+
+* One-to-many from channel to fee rules
+
+Cardinality:
+
+```text
+CHANNELS 1 — Applies Through — N FEE RULES
+```
+
+Participation:
+
+* Optional on the channel side
+* Mandatory on the fee rule side
+
+Business rules:
+
+* A channel can have zero or many fee rules.
+* Each fee rule must apply through exactly one channel.
+
+Relational mapping:
+
+```text
+fee_rules.channel_id → channels.channel_id
+```
+
+## 9.3 Fee Rule Applies in Currency
+
+Relationship:
+
+```text
+FEE RULES — Applies In — CURRENCIES
+```
+
+Relationship type:
+
+* One-to-many from currency to fee rules
+
+Cardinality:
+
+```text
+CURRENCIES 1 — Applies In — N FEE RULES
+```
+
+Participation:
+
+* Optional on the currency side
+* Mandatory on the fee rule side
+
+Business rules:
+
+* A currency can have zero or many fee rules.
+* Each fee rule must apply in exactly one currency.
+* Fee rules are configured by transaction type, channel, and currency.
+
+Relational mapping:
+
+```text
+fee_rules.currency_code → currencies.currency_code
+```
+
+## 9.4 Transaction Charged Fee by Fee Rule
+
+Relationship:
+
+```text
+TRANSACTIONS — Charged Fee — FEE RULES
+```
+
+Relationship type:
+
+* Many-to-many
+* Associative relationship with attributes
+
+Cardinality:
+
+```text
+TRANSACTIONS N — Charged Fee — N FEE RULES
+```
+
+Participation:
+
+* Optional on the transaction side
+* Optional on the fee rule side
+
+Business rules:
+
+* A transaction can have zero or many fee charges.
+* A fee rule can be applied to zero or many transactions.
+* A transaction may have no fee.
+* A fee rule may exist before being applied to any transaction.
+* The actual charged fee amount is stored on the relationship.
+
+Relationship attributes:
+
+* `amount`
+* `time`
+* `note`
+
+Relational mapping:
+
+```text
+Charged Fee → transaction_fee_charges
+```
+
+Implementation table:
+
+```text
+transaction_fee_charges(
+    fee_charge_id,
+    transaction_id,
+    fee_rule_id,
+    fee_amount,
+    calculated_at,
+    calculation_note
+)
+```
+
+Implementation notes:
+
+* `fee_amount` stores the actual calculated fee.
+* `fixed_fee` and `percentage` are configuration attributes in `fee_rules`.
+* `fee_amount` is the actual charged value for a specific transaction.
+
+## 10. Fraud and Risk Relationships
+
+## 10.1 Transaction Triggers Risk Alert
+
+Relationship:
+
+```text
+TRANSACTIONS — Triggers — RISK ALERTS
+```
+
+Relationship type:
+
+* One-to-many
+
+Cardinality:
+
+```text
+TRANSACTIONS 1 — Triggers — N RISK ALERTS
+```
+
+Participation:
+
+* Optional on the transaction side
+* Mandatory on the risk alert side
+
+Business rules:
+
+* A transaction can trigger zero or many risk alerts.
+* Each risk alert must belong to exactly one transaction.
+* A risk alert cannot exist without a related transaction.
+
+Relational mapping:
+
+```text
+risk_alerts.transaction_id → transactions.transaction_id
+```
+
+## 10.2 Fraud Rule Generates Risk Alert
+
+Relationship:
+
+```text
+FRAUD RULES — Based On — RISK ALERTS
+```
+
+Relationship type:
+
+* One-to-many
+
+Cardinality:
+
+```text
+FRAUD RULES 1 — Based On — N RISK ALERTS
+```
+
+Participation:
+
+* Optional on the fraud rule side
+* Mandatory on the risk alert side
+
+Business rules:
+
+* A fraud rule can generate zero or many risk alerts.
+* Each risk alert must be based on exactly one fraud rule.
+* A risk alert cannot exist without a fraud rule.
+
+Relational mapping:
+
+```text
+risk_alerts.fraud_rule_id → fraud_rules.fraud_rule_id
+```
+
+## 10.3 Admin Reviews Risk Alert
+
+Relationship:
+
+```text
+ADMINS — Reviewed By — RISK ALERTS
+```
+
+Relationship type:
+
+* Many-to-many
+* Associative relationship with attributes
+
+Cardinality:
+
+```text
+ADMINS N — Reviewed By — N RISK ALERTS
+```
+
+Participation:
+
+* Optional on the admin side
+* Optional on the risk alert side
+
+Business rules:
+
+* An admin can review zero or many risk alerts.
+* A risk alert can be reviewed by zero or many admins.
+* A risk alert may remain unreviewed.
+* Review information is stored on the relationship.
+
+Relationship attributes:
+
+* `review_id`
+* `reviewed_at`
+* `review_decision`
+* `review_note`
+
+Relational mapping:
+
+```text
+Reviewed By → alert_reviews
+```
+
+Implementation table:
+
+```text
+alert_reviews(
+    review_id,
+    risk_alert_id,
+    admin_id,
+    reviewed_at,
+    review_decision,
+    review_note
+)
+```
+
+## 11. Summary Relationship Table
+
+| No. | Relationship                                    | Cardinality | Mandatory Side               | Relational Mapping                  |
+| --: | ----------------------------------------------- | ----------- | ---------------------------- | ----------------------------------- |
+|   1 | `users` specialization to `customers`           | 1:1         | `customers`                  | `customers.user_id`                 |
+|   2 | `users` specialization to `admins`              | 1:1         | `admins`                     | `admins.user_id`                    |
+|   3 | `admins` grants permission to `admins`          | N:N         | None                         | `admin_permissions`                 |
+|   4 | `customers` owns `accounts`                     | 1:N         | `accounts`                   | `accounts.customer_id`              |
+|   5 | `branches` manages `accounts`                   | 1:N         | `accounts`                   | `accounts.branch_id`                |
+|   6 | `currencies` denominates `accounts`             | 1:N         | `accounts`                   | `accounts.currency_code`            |
+|   7 | `accounts` has `cards`                          | 1:N         | `cards`                      | `cards.account_id`                  |
+|   8 | `accounts` generates `transactions`             | 1:N         | `transactions`               | `transactions.account_id`           |
+|   9 | `cards` used in `transactions`                  | 1:N         | None                         | `transactions.card_id` nullable     |
+|  10 | `channels` processes `transactions`             | 1:N         | `transactions`               | `transactions.channel_id`           |
+|  11 | `transaction_types` classifies `transactions`   | 1:N         | `transactions`               | `transactions.transaction_type_id`  |
+|  12 | `currencies` used by `transactions`             | 1:N         | `transactions`               | `transactions.currency_code`        |
+|  13 | `merchant_categories` contains `merchants`      | 1:N         | `merchants`                  | `merchants.merchant_category_id`    |
+|  14 | `merchants` occurs at `transactions`            | 1:N         | None                         | `transactions.merchant_id` nullable |
+|  15 | `transactions` has `transaction_status_history` | 1:N         | `transaction_status_history` | composite PK                        |
+|  16 | `transaction_types` applies to `fee_rules`      | 1:N         | `fee_rules`                  | `fee_rules.transaction_type_id`     |
+|  17 | `channels` applies through `fee_rules`          | 1:N         | `fee_rules`                  | `fee_rules.channel_id`              |
+|  18 | `currencies` applies in `fee_rules`             | 1:N         | `fee_rules`                  | `fee_rules.currency_code`           |
+|  19 | `transactions` charged fee by `fee_rules`       | N:N         | None                         | `transaction_fee_charges`           |
+|  20 | `transactions` triggers `risk_alerts`           | 1:N         | `risk_alerts`                | `risk_alerts.transaction_id`        |
+|  21 | `fraud_rules` based on `risk_alerts`            | 1:N         | `risk_alerts`                | `risk_alerts.fraud_rule_id`         |
+|  22 | `admins` reviews `risk_alerts`                  | N:N         | None                         | `alert_reviews`                     |
+
+## 12. Optional Relationship Summary
+
+The following relationships are optional and must be handled carefully in the relational schema:
+
+### 12.1 Optional Card Usage
+
+A transaction may not use a card.
+
+```text
+transactions.card_id nullable
+```
+
+### 12.2 Optional Merchant Involvement
+
+A transaction may not involve a merchant.
+
+```text
+transactions.merchant_id nullable
+```
+
+### 12.3 Optional Fee Charges
+
+A transaction may not have fee charges.
+
+```text
+transaction_fee_charges may have no row for a transaction
+```
+
+### 12.4 Optional Risk Alert Review
+
+A risk alert may not have been reviewed yet.
+
+```text
+alert_reviews may have no row for a risk alert
+```
+
+### 12.5 Optional Permission Delegation
+
+An admin may not grant or receive permissions.
+
+```text
+admin_permissions may have no row for an admin
+```
+
+## 13. Mandatory Relationship Summary
+
+The following relationships are mandatory on the child or dependent side:
+
+* Each account must belong to one customer.
+* Each account must be managed by one branch.
+* Each account must use one currency.
+* Each card must belong to one account.
+* Each transaction must belong to one account.
+* Each transaction must have one transaction type.
+* Each transaction must be processed through one channel.
+* Each transaction must use one currency.
+* Each transaction status history record must belong to one transaction.
+* Each merchant must belong to one merchant category.
+* Each fee rule must apply to one transaction type.
+* Each fee rule must apply through one channel.
+* Each fee rule must apply in one currency.
+* Each risk alert must belong to one transaction.
+* Each risk alert must be based on one fraud rule.
+
+## 14. EERD-to-Relational Mapping Summary
+
+The Chen-style EERD contains conceptual modeling features that will be mapped into relational tables.
+
+Mapping rules:
+
+* Superclass/subclass:
+
+  * `users`
+  * `customers`
+  * `admins`
+
+* Recursive relationship:
+
+  * `Grants Permission` → `admin_permissions`
+
+* Weak entity:
+
+  * `Transaction Status History` → `transaction_status_history`
+
+* Associative relationships:
+
+  * `Charged Fee` → `transaction_fee_charges`
+  * `Reviewed By` → `alert_reviews`
+
+* Optional entity relationships:
+
+  * `transactions.card_id` is nullable
+  * `transactions.merchant_id` is nullable
+
+* Mandatory entity relationships:
+
+  * Implemented using `NOT NULL` foreign keys where appropriate
+
+## 15. Design Notes
+
+Important design notes:
+
+* The `transactions` entity is the central entity of the OLTP model.
+* `transaction_status_history` is modeled as a weak entity because it depends on `transactions`.
+* `admin_permissions`, `transaction_fee_charges`, and `alert_reviews` are shown as relationships with attributes in the EERD, but they will become tables in the relational schema.
+* Fee rules are configured by transaction type, channel, and currency.
+* Fraud rules generate risk alerts, but alert reviews are handled separately by admins.
+* Derived attributes are not stored directly in the OLTP schema.
+* Only masked card numbers are stored.
+* Full card numbers must not be stored.
+* All project data must be synthetic.
